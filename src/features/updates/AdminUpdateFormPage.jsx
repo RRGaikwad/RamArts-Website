@@ -16,7 +16,7 @@ import { toast } from '../../lib/toast';
 const schema = z.object({
   title: z.string().min(3, 'Title required'),
   slug: z.string().optional(),
-  published: z.boolean().optional(),
+  published: z.boolean().default(true),
   scheduledAt: z.string().optional(),
 });
 

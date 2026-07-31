@@ -34,9 +34,15 @@ export default function UpdatesPage() {
 
       <section className="container-page pb-20 md:pb-30">
         {isLoading && <GridSkeleton count={3} />}
-        {isError && <p className="text-danger">Could not load updates.</p>}
-        {!isLoading && !updates?.length && (
-          <p className="py-16 text-center text-ink-muted">No updates published yet.</p>
+        {isError && (
+          <div className="mb-8 rounded-sm border border-danger/30 bg-paper-raised p-4 text-sm text-danger">
+            Could not load updates. Confirm Firestore rules are published and posts are marked Published.
+          </div>
+        )}
+        {!isLoading && !isError && !updates?.length && (
+          <p className="py-16 text-center text-ink-muted">
+            No updates published yet. Publish a post from Admin → Updates to show it here.
+          </p>
         )}
 
         <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-3">

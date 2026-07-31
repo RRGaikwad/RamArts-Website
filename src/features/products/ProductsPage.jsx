@@ -63,11 +63,15 @@ export default function ProductsPage() {
       <section className="container-page pb-20 md:pb-30">
         {isLoading && <GridSkeleton count={6} />}
         {isError && (
-          <p className="text-danger">Could not load projects. Please refresh and try again.</p>
+          <div className="mb-8 rounded-sm border border-danger/30 bg-paper-raised p-4 text-sm text-danger">
+            Could not load projects from Firestore. Check that security rules allow public read of published
+            products, then refresh. (Admin-created drafts never appear here until Published.)
+          </div>
         )}
-        {!isLoading && !filtered.length && (
+        {!isLoading && !isError && !filtered.length && (
           <p className="py-16 text-center text-ink-muted">
-            No published work in this category yet. Check back soon.
+            No published work in this category yet. In Admin → Products, create an item and ensure{' '}
+            <strong>Published</strong> is on.
           </p>
         )}
 

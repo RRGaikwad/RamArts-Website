@@ -18,8 +18,8 @@ const schema = z.object({
   description: z.string().optional(),
   categoryId: z.string().min(1, 'Select a category'),
   tags: z.string().optional(),
-  featured: z.boolean().optional(),
-  published: z.boolean().optional(),
+  featured: z.boolean().default(false),
+  published: z.boolean().default(true),
 });
 
 export default function AdminProductFormPage() {
@@ -157,6 +157,25 @@ export default function AdminProductFormPage() {
       <h1 className="font-display text-display-md">{isNew ? 'New product' : 'Edit product'}</h1>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-8 max-w-3xl space-y-6">
+        <div className="rounded-sm border border-brand/30 bg-brand-muted/50 p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--color-brand)]" {...register('published')} />
+            <span>
+              <span className="block font-medium text-ink">Publish on the public site</span>
+              <span className="mt-0.5 block text-sm text-ink-muted">
+                Must be checked or this product stays a draft and will not appear under Work / Home.
+              </span>
+            </span>
+          </label>
+          <label className="mt-3 flex cursor-pointer items-start gap-3 border-t border-brand/20 pt-3">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-[var(--color-brand)]" {...register('featured')} />
+            <span>
+              <span className="block font-medium text-ink">Featured on Home</span>
+              <span className="mt-0.5 block text-sm text-ink-muted">Show in the Featured projects section.</span>
+            </span>
+          </label>
+        </div>
+
         <div>
           <label className="label-field" htmlFor="name">
             Name
@@ -208,15 +227,29 @@ export default function AdminProductFormPage() {
           <input id="tags" className="input-field" {...register('tags')} placeholder="acrylic, illuminated" />
         </div>
 
-        <div>
-          <p className="label-field">Images</p>
-          <UrlMediaList value={images} onChange={setImages} type="image" requireAlt addLabel="Add image URL" />
-        </div>
-
-        <div>
-          <p className="label-field">Videos</p>
-          <UrlMediaList value={videos} onChange={setVideos} type="video" requireAlt={false} addLabel="Add video URL" />
-        </div>
+        <section className="space-y-6 rounded-sm border-2 border-brand/40 bg-paper-raised p-5 shadow-soft">
+          <div>
+            <h2 className="font-display text-xl font-600">Media URLs</h2>
+            <p className="mt-1 text-sm text-ink-muted">
+              Paste public <code className="text-caption">https://</code> links (ImgBB, Cloudinary, Dropbox direct
+              link, etc.). We do not upload files to Firebase Storage.
+            </p>
+          </div>
+          <div>
+            <p className="label-field">Image URLs</p>
+            <UrlMediaList value={images} onChange={setImages} type="image" requireAlt addLabel="Add image URL" />
+          </div>
+          <div>
+            <p className="label-field">Video URLs</p>
+            <UrlMediaList
+              value={videos}
+              onChange={setVideos}
+              type="video"
+              requireAlt={false}
+              addLabel="Add video URL"
+            />
+          </div>
+        </section>
 
         <div>
           <label className="label-field" htmlFor="specs">
@@ -229,17 +262,6 @@ export default function AdminProductFormPage() {
             value={specsText}
             onChange={(e) => setSpecsText(e.target.value)}
           />
-        </div>
-
-        <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register('published')} />
-            Published
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register('featured')} />
-            Featured on home
-          </label>
         </div>
 
         <div className="flex gap-3">

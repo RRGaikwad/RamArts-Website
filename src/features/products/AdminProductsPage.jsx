@@ -42,6 +42,10 @@ export default function AdminProductsPage() {
         <div>
           <h1 className="font-display text-display-md">Products</h1>
           <p className="text-ink-muted">Portfolio items shown on the public Work page.</p>
+          <p className="mt-2 max-w-xl text-sm text-accent">
+            Tip: items marked Draft stay hidden from visitors. Use the Published toggle or edit the product
+            and keep “Publish on the public site” checked.
+          </p>
         </div>
         <Link to="/admin/products/new" className="btn-primary">
           Add product
