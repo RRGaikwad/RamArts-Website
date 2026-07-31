@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -11,6 +11,7 @@ import { UrlCoverField, UrlMediaList } from '../../components/UrlMediaList';
 import { Skeleton } from '../../components/Skeletons';
 import { useUpdate, useUpdateMutations } from '../../hooks/useUpdates';
 import { slugify } from '../../lib/utils';
+import { normalizeImageUrl } from '../../lib/mediaUrls';
 import { toast } from '../../lib/toast';
 
 const schema = z.object({
@@ -40,6 +41,7 @@ export default function AdminUpdateFormPage() {
   const [body, setBody] = useState('');
   const [coverImage, setCoverImage] = useState(null);
   const [gallery, setGallery] = useState([]);
+  const galleryRef = useRef(null);
 
   const {
     register,
@@ -72,12 +74,29 @@ export default function AdminUpdateFormPage() {
   }, [existing, isNew, reset]);
 
   const onSubmit = async (values) => {
+    const flushedGallery = galleryRef.current?.flush?.() || { ok: true, items: gallery };
+    if (!flushedGallery.ok) {
+      toast.error(flushedGallery.error || 'Fix gallery URL before saving');
+      return;
+    }
+
+    const cover = coverImage?.url
+      ? {
+          url: normalizeImageUrl(coverImage.url),
+          alt: coverImage.alt?.trim() || 'Cover image',
+        }
+      : null;
+
     const payload = {
       title: values.title,
       slug: values.slug || slugify(values.title),
       bodyRichText: body,
-      coverImage,
-      gallery,
+      coverImage: cover,
+      gallery: (flushedGallery.items || []).map((g, i) => ({
+        url: normalizeImageUrl(g.url),
+        alt: (g.alt || 'Gallery image').trim(),
+        order: i,
+      })),
       published: Boolean(values.published),
       scheduledAt: values.scheduledAt || undefined,
     };
@@ -147,7 +166,14 @@ export default function AdminUpdateFormPage() {
           </div>
           <div>
             <p className="label-field">Gallery image URLs</p>
-            <UrlMediaList value={gallery} onChange={setGallery} type="image" requireAlt addLabel="Add gallery image URL" />
+            <UrlMediaList
+              ref={galleryRef}
+              value={gallery}
+              onChange={setGallery}
+              type="image"
+              requireAlt
+              addLabel="Add gallery image URL"
+            />
           </div>
         </div>
 

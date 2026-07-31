@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { SEO } from '../../components/SEO';
 import { Reveal } from '../../components/Reveal';
-import { LazyImage, GalleryLightbox } from '../../components/Gallery';
+import { LazyImage, GalleryLightbox, MediaPlayer } from '../../components/Gallery';
 import { PageHeaderSkeleton, Skeleton } from '../../components/Skeletons';
 import { useProduct, useRelatedProducts } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
@@ -100,15 +100,9 @@ export default function ProductDetailPage() {
               aria-label="Open gallery"
             >
               {cover?.type === 'video' ? (
-                <video
-                  src={cover.url}
-                  poster={cover.thumbnailUrl}
-                  className="aspect-[16/10] w-full object-cover"
-                  muted
-                  playsInline
-                  loop
-                  autoPlay
-                />
+                <div className="pointer-events-none aspect-[16/10] w-full">
+                  <MediaPlayer url={cover.url} poster={cover.thumbnailUrl} className="h-full object-cover" />
+                </div>
               ) : (
                 <LazyImage
                   src={cover.url}

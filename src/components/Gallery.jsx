@@ -1,6 +1,7 @@
+import { normalizeImageUrl, normalizeVideo } from '../lib/mediaUrls';
+import { createBlurDataUrl } from '../lib/utils';
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createBlurDataUrl } from '../lib/utils';
 
 export function LazyImage({
   src,
@@ -12,6 +13,12 @@ export function LazyImage({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
+  const resolved = src ? normalizeImageUrl(src) : '';
+
+  useEffect(() => {
+    setLoaded(false);
+    setError(false);
+  }, [resolved]);
 
   return (
     <div
@@ -26,12 +33,13 @@ export function LazyImage({
           className="absolute inset-0 h-full w-full scale-110 object-cover blur-lg"
         />
       )}
-      {!error ? (
+      {!error && resolved ? (
         <img
-          src={src}
+          src={resolved}
           alt={alt}
           loading="lazy"
           decoding="async"
+          referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
           onError={() => setError(true)}
           className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? 'opacity-100' : 'opacity-0'} ${className}`}
@@ -39,10 +47,41 @@ export function LazyImage({
         />
       ) : (
         <div className="flex h-full min-h-[120px] w-full items-center justify-center text-caption text-ink-muted">
-          Image unavailable
+          {src ? 'Image unavailable' : 'No image'}
         </div>
       )}
     </div>
+  );
+}
+
+/** Renders file video, YouTube, or Vimeo */
+export function MediaPlayer({ url, poster, className = '', autoPlay = false }) {
+  const video = normalizeVideo(url);
+  if (!video.src && !video.embedUrl) return null;
+
+  if (video.kind === 'youtube' || video.kind === 'vimeo') {
+    return (
+      <iframe
+        title="Video"
+        src={video.embedUrl}
+        className={`aspect-video w-full border-0 ${className}`}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+
+  return (
+    <video
+      src={video.src}
+      poster={poster}
+      controls
+      playsInline
+      autoPlay={autoPlay}
+      className={`w-full ${className}`}
+    >
+      <track kind="captions" />
+    </video>
   );
 }
 
@@ -76,7 +115,6 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
     };
   }, [open, onClose, next, prev]);
 
-  // Basic swipe
   useEffect(() => {
     if (!open) return;
     let startX = 0;
@@ -149,27 +187,20 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
           <AnimatePresence mode="wait">
             <motion.div
               key={index}
-              className="relative max-h-[85vh] max-w-5xl"
+              className="relative max-h-[85vh] w-full max-w-5xl"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.25 }}
             >
               {current.type === 'video' ? (
-                <video
-                  src={current.url}
-                  controls
-                  autoPlay
-                  className="max-h-[85vh] w-auto max-w-full"
-                  poster={current.thumbnailUrl}
-                >
-                  <track kind="captions" />
-                </video>
+                <MediaPlayer url={current.url} poster={current.thumbnailUrl} autoPlay className="max-h-[85vh]" />
               ) : (
                 <img
-                  src={current.url}
+                  src={normalizeImageUrl(current.url)}
                   alt={current.alt || ''}
-                  className="max-h-[85vh] w-auto max-w-full object-contain"
+                  referrerPolicy="no-referrer"
+                  className="mx-auto max-h-[85vh] w-auto max-w-full object-contain"
                 />
               )}
             </motion.div>

@@ -51,17 +51,27 @@ export function Footer() {
                 <li className="pt-2 text-caption uppercase tracking-wider">{settings.businessHours}</li>
               )}
             </ul>
-            <div className="mt-4 flex gap-4 text-sm">
-              {settings?.socialLinks?.instagram && (
-                <a href={settings.socialLinks.instagram} target="_blank" rel="noreferrer" className="hover:text-brand">
+            <div className="mt-4 flex flex-wrap gap-4 text-sm">
+              {settings?.socialLinks?.instagram ? (
+                <a
+                  href={settings.socialLinks.instagram}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-ink hover:text-brand"
+                >
                   Instagram
                 </a>
-              )}
-              {settings?.socialLinks?.facebook && (
-                <a href={settings.socialLinks.facebook} target="_blank" rel="noreferrer" className="hover:text-brand">
+              ) : null}
+              {settings?.socialLinks?.facebook ? (
+                <a
+                  href={settings.socialLinks.facebook}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-ink hover:text-brand"
+                >
                   Facebook
                 </a>
-              )}
+              ) : null}
             </div>
           </div>
         </div>

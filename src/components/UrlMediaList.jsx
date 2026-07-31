@@ -1,61 +1,92 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { toast } from '../lib/toast';
-import { isValidHttpUrl } from '../lib/utils';
+import {
+  isValidHttpUrl,
+  normalizeImageUrl,
+  normalizeVideo,
+  ensureHttps,
+} from '../lib/mediaUrls';
 
 /**
  * Admin media list using external URLs (no Firebase Storage).
- * value: [{ url, alt?, order?, thumbnailUrl? }]
+ * - No nested <form> (avoids stealing parent Save submit).
+ * - flush() commits any in-progress URL when parent saves.
  */
-export function UrlMediaList({
-  value = [],
-  onChange,
-  type = 'image',
-  requireAlt = true,
-  addLabel = 'Add',
-}) {
+export const UrlMediaList = forwardRef(function UrlMediaList(
+  { value = [], onChange, type = 'image', requireAlt = true, addLabel = 'Add' },
+  ref
+) {
   const [url, setUrl] = useState('');
   const [alt, setAlt] = useState('');
   const [thumb, setThumb] = useState('');
 
-  const add = (e) => {
-    e?.preventDefault?.();
-    const trimmed = url.trim();
-    if (!trimmed) {
+  const commitOne = (list, rawUrl, rawAlt, rawThumb) => {
+    const trimmed = ensureHttps(rawUrl.trim());
+    if (!trimmed) return { ok: true, added: false, list };
+    if (!isValidHttpUrl(trimmed)) {
+      return { ok: false, error: 'Enter a valid http(s) URL', list };
+    }
+
+    if (type === 'image') {
+      const altText = (rawAlt || '').trim() || 'Portfolio image';
+      if (requireAlt && !(rawAlt || '').trim()) {
+        toast.info('Alt text was empty — used a default. Edit it for better SEO.');
+      }
+      const item = {
+        url: normalizeImageUrl(trimmed),
+        alt: altText,
+        order: list.length,
+      };
+      return { ok: true, added: true, list: [...list, item] };
+    }
+
+    const video = normalizeVideo(trimmed);
+    const thumbNorm = (rawThumb || '').trim() ? normalizeImageUrl(rawThumb.trim()) : '';
+    if (thumbNorm && !isValidHttpUrl(thumbNorm)) {
+      return { ok: false, error: 'Thumbnail must be a valid URL', list };
+    }
+    const item = {
+      url: video.src || trimmed,
+      thumbnailUrl: thumbNorm,
+      order: list.length,
+      provider: video.kind !== 'file' ? video.kind : undefined,
+      embedUrl: video.embedUrl || undefined,
+    };
+    return { ok: true, added: true, list: [...list, item] };
+  };
+
+  const add = () => {
+    const result = commitOne(value || [], url, alt, thumb);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    if (!url.trim()) {
       toast.error('Paste a media URL first');
       return;
     }
-    if (!isValidHttpUrl(trimmed)) {
-      toast.error('Enter a valid http(s) URL');
-      return;
-    }
-    if (type === 'image' && requireAlt && !alt.trim()) {
-      toast.error('Alt text is required for accessibility');
-      return;
-    }
-    if (type === 'video' && thumb.trim() && !isValidHttpUrl(thumb.trim())) {
-      toast.error('Thumbnail must be a valid URL');
-      return;
-    }
-
-    const item =
-      type === 'video'
-        ? {
-            url: trimmed,
-            thumbnailUrl: thumb.trim() || '',
-            order: value.length,
-          }
-        : {
-            url: trimmed,
-            alt: alt.trim(),
-            order: value.length,
-          };
-
-    onChange([...(value || []), item]);
+    onChange(result.list);
     setUrl('');
     setAlt('');
     setThumb('');
     toast.success(type === 'video' ? 'Video URL added' : 'Image URL added');
   };
+
+  useImperativeHandle(ref, () => ({
+    /** Returns { ok, error?, items } — items include any pending draft URL */
+    flush: () => {
+      if (!url.trim() && !alt.trim() && !thumb.trim()) {
+        return { ok: true, items: value || [] };
+      }
+      const result = commitOne(value || [], url, alt, thumb);
+      if (!result.ok) return { ok: false, error: result.error, items: value || [] };
+      onChange(result.list);
+      setUrl('');
+      setAlt('');
+      setThumb('');
+      return { ok: true, items: result.list };
+    },
+  }));
 
   const move = (index, dir) => {
     const next = [...value];
@@ -73,7 +104,27 @@ export function UrlMediaList({
   };
 
   const updateField = (index, field, fieldValue) => {
-    onChange(value.map((item, i) => (i === index ? { ...item, [field]: fieldValue } : item)));
+    onChange(
+      value.map((item, i) => {
+        if (i !== index) return item;
+        if (field === 'url' && type === 'image') {
+          return { ...item, url: normalizeImageUrl(fieldValue) };
+        }
+        if (field === 'url' && type === 'video') {
+          const video = normalizeVideo(fieldValue);
+          return {
+            ...item,
+            url: video.src || ensureHttps(fieldValue),
+            provider: video.kind !== 'file' ? video.kind : undefined,
+            embedUrl: video.embedUrl || undefined,
+          };
+        }
+        if (field === 'thumbnailUrl') {
+          return { ...item, thumbnailUrl: normalizeImageUrl(fieldValue) };
+        }
+        return { ...item, [field]: fieldValue };
+      })
+    );
   };
 
   const remove = (index) => {
@@ -83,11 +134,12 @@ export function UrlMediaList({
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">
-        Host images/videos on Drive, Dropbox, Cloudinary, ImgBB, YouTube, etc., then paste the
-        public link here. Files are not uploaded to Firebase.
+        Paste a public link, then click <strong>{addLabel}</strong> (or just Save — we&apos;ll pick up a
+        pending URL). Direct image links work best; Drive/Dropbox/YouTube links are normalized when
+        possible.
       </p>
 
-      <form onSubmit={add} className="space-y-3 border border-line bg-paper p-4">
+      <div className="space-y-3 border border-line bg-paper p-4">
         <div>
           <label className="label-field" htmlFor={`media-url-${type}`}>
             {type === 'video' ? 'Video URL' : 'Image URL'}
@@ -97,21 +149,35 @@ export function UrlMediaList({
             className="input-field"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                add();
+              }
+            }}
             placeholder={
-              type === 'video' ? 'https://…/video.mp4 or streaming URL' : 'https://…/photo.jpg'
+              type === 'video'
+                ? 'https://youtube.com/watch?v=… or .mp4'
+                : 'https://…/photo.jpg'
             }
           />
         </div>
         {type === 'image' && (
           <div>
             <label className="label-field" htmlFor={`media-alt-${type}`}>
-              Alt text {requireAlt ? '(required)' : ''}
+              Alt text {requireAlt ? '(recommended)' : ''}
             </label>
             <input
               id={`media-alt-${type}`}
               className="input-field"
               value={alt}
               onChange={(e) => setAlt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  add();
+                }
+              }}
               placeholder="e.g. Acrylic storefront sign at dusk"
             />
           </div>
@@ -130,10 +196,10 @@ export function UrlMediaList({
             />
           </div>
         )}
-        <button type="submit" className="btn-secondary">
+        <button type="button" className="btn-secondary" onClick={add}>
           {addLabel}
         </button>
-      </form>
+      </div>
 
       {value?.length > 0 && (
         <ul className="space-y-3">
@@ -147,7 +213,9 @@ export function UrlMediaList({
                   item.thumbnailUrl ? (
                     <img src={item.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-caption">Video</div>
+                    <div className="flex h-full items-center justify-center text-caption">
+                      {item.provider || 'Video'}
+                    </div>
                   )
                 ) : (
                   <img src={item.url} alt={item.alt || ''} className="h-full w-full object-cover" />
@@ -196,9 +264,9 @@ export function UrlMediaList({
       )}
     </div>
   );
-}
+});
 
-/** Single cover image via URL */
+/** Cover image — always synced to parent (no separate Set click required before Save) */
 export function UrlCoverField({ value, onChange }) {
   const [url, setUrl] = useState(value?.url || '');
   const [alt, setAlt] = useState(value?.alt || '');
@@ -208,22 +276,18 @@ export function UrlCoverField({ value, onChange }) {
     setAlt(value?.alt || '');
   }, [value?.url, value?.alt]);
 
-  const apply = (e) => {
-    e?.preventDefault?.();
-    if (!url.trim()) {
+  const sync = (nextUrl, nextAlt) => {
+    const trimmedUrl = nextUrl.trim();
+    if (!trimmedUrl) {
       onChange(null);
       return;
     }
-    if (!isValidHttpUrl(url.trim())) {
-      toast.error('Enter a valid http(s) URL');
-      return;
-    }
-    if (!alt.trim()) {
-      toast.error('Alt text is required');
-      return;
-    }
-    onChange({ url: url.trim(), alt: alt.trim() });
-    toast.success('Cover URL saved');
+    const normalized = normalizeImageUrl(trimmedUrl);
+    if (!isValidHttpUrl(normalized)) return;
+    onChange({
+      url: normalized,
+      alt: nextAlt.trim() || 'Cover image',
+    });
   };
 
   return (
@@ -233,7 +297,7 @@ export function UrlCoverField({ value, onChange }) {
           <img src={value.url} alt={value.alt || ''} className="h-full w-full object-cover" />
         </div>
       )}
-      <form onSubmit={apply} className="space-y-3 border border-line bg-paper p-4">
+      <div className="space-y-3 border border-line bg-paper p-4">
         <div>
           <label className="label-field" htmlFor="cover-url">
             Cover image URL
@@ -242,7 +306,11 @@ export function UrlCoverField({ value, onChange }) {
             id="cover-url"
             className="input-field"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              sync(e.target.value, alt);
+            }}
+            onBlur={() => sync(url, alt)}
             placeholder="https://…/cover.jpg"
           />
         </div>
@@ -254,29 +322,29 @@ export function UrlCoverField({ value, onChange }) {
             id="cover-alt"
             className="input-field"
             value={alt}
-            onChange={(e) => setAlt(e.target.value)}
+            onChange={(e) => {
+              setAlt(e.target.value);
+              sync(url, e.target.value);
+            }}
+            onBlur={() => sync(url, alt)}
             placeholder="Describe the cover image"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="submit" className="btn-secondary">
-            Set cover
+        {value && (
+          <button
+            type="button"
+            className="btn-ghost text-danger"
+            onClick={() => {
+              onChange(null);
+              setUrl('');
+              setAlt('');
+            }}
+          >
+            Remove cover
           </button>
-          {value && (
-            <button
-              type="button"
-              className="btn-ghost text-danger"
-              onClick={() => {
-                onChange(null);
-                setUrl('');
-                setAlt('');
-              }}
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      </form>
+        )}
+        <p className="text-caption text-ink-muted">Saved automatically with the post — no extra click needed.</p>
+      </div>
     </div>
   );
 }

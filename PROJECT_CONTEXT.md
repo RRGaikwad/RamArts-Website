@@ -35,11 +35,13 @@ Repo: `https://github.com/RRGaikwad/RamArts-Website`
 
 1. **Public lists only show `published == true`.** Drafts are invisible on `/products`, `/updates`, and Home featured.
 2. **New products/updates default to Published = true** in admin forms. Always keep the publish checkbox obvious.
-3. **Media = paste URLs.** Prefer direct image links (`.jpg` / `.png` / `.webp`). Google Drive “share page” links often do not work in `<img>`.
-4. **Spark plan:** avoid Firestore composite `orderBy` + multi-`where` queries. Prefer equality filters + **client-side sort** (`sortByTimestampDesc` in `useFirestoreRealtimeQuery.js`).
-5. **Vercel production tracks `main`.** Feature branches only create Preview deploys. **URL-media / realtime fixes must be merged to `main` and redeployed to Production** or the live site stays on old code.
-6. **Env vars:** `VITE_*` are baked at build time. Changing Vercel env requires a **redeploy**.
-7. **Firestore rules** must allow: public read of published products/updates + settings; public create inquiries; admin UID write. Locked rules (`allow read, write: if false`) break the whole site.
+3. **Media = paste URLs**, committed on Add **or** automatically via `flush()` on Save. Prefer direct image links; Drive/Dropbox/YouTube/Maps links are normalized in `src/lib/mediaUrls.js`.
+4. **Never nest `<form>` inside admin page forms** — breaks Save / Add.
+5. **Spark plan:** avoid Firestore composite `orderBy` + multi-`where` queries. Prefer equality filters + **client-side sort** (`sortByTimestampDesc` in `useFirestoreRealtimeQuery.js`).
+6. **Vercel production tracks `main`.** Feature branches only create Preview deploys. Merge + redeploy Production after CMS fixes.
+7. **Env vars:** `VITE_*` are baked at build time. Changing Vercel env requires a **redeploy**.
+8. **Firestore rules** must allow: public read of published products/updates + settings; public create inquiries; admin UID write.
+9. **Settings social/map:** store under `socialLinks.{instagram,facebook}` and `mapEmbedUrl`; normalize with `normalizeSocialUrl` / `normalizeMapEmbedUrl` before save.
 
 Admin UID (current): `el6wul7NedZF5FNBK4ZGVUlht4Z2` — keep in sync across `.env`, Vercel envs, and `firestore.rules`.
 
@@ -82,6 +84,18 @@ vercel.json              SPA rewrites → index.html
   2. **Drafts:** Admin defaulted `published: false`, so Firestore + public queries correctly hid items.
 - **Fix:** Prominent Media URLs + Publish panels; default `published: true`; clearer empty/error copy; merge to `main` and deploy Production.
 - **Lesson for agents:** After shipping CMS changes, verify **Production** deployment (not only Preview). Confirm `published` on sample docs in Firestore Console.
+
+### 2026-07-31 — Media / map / social URLs not showing on public site
+- **Causes:**
+  1. Nested `<form>` inside product/update forms → Add/Set buttons fought parent Save; pending URLs often never committed.
+  2. Cover field required a separate “Set cover” click before Save — easy to miss → `coverImage: null` in Firestore.
+  3. Share links (Drive/Dropbox/YouTube, Google Maps place links, social without `https://`) stored raw; `<img>` / `<video>` / `<iframe>` cannot render them.
+  4. Settings `socialLinks` shallow-merge edge cases; Save button disabled when `!isDirty`.
+- **Fix:**
+  - `UrlMediaList` / `UrlCoverField`: no nested forms; cover syncs live; `flush()` commits pending URLs on Save.
+  - `src/lib/mediaUrls.js`: normalize image/video/map/social URLs; YouTube/Vimeo via `MediaPlayer`.
+  - Settings deep-merge + normalize on save/read; map preview in admin; always-enabled Save.
+- **Rule:** Never nest forms in admin. Always normalize third-party URLs before write and on display. Redeploy Production after CMS media fixes.
 
 ### Approach for realtime sync
 - Use `onSnapshot` → `queryClient.setQueryData` via `useFirestoreRealtimeQuery`.

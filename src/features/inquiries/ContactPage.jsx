@@ -96,7 +96,7 @@ export default function ContactPage() {
               )}
             </Reveal>
 
-            {settings?.mapEmbedUrl && (
+            {settings?.mapEmbedUrl ? (
               <Reveal delay={0.15} className="mt-10 aspect-video overflow-hidden bg-paper-sunken">
                 <iframe
                   title="Studio location map"
@@ -107,7 +107,7 @@ export default function ContactPage() {
                   allowFullScreen
                 />
               </Reveal>
-            )}
+            ) : null}
           </div>
 
           <Reveal delay={0.1} className="lg:col-span-7">

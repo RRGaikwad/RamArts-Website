@@ -14,7 +14,9 @@ export function createBlurDataUrl(width = 16, height = 10, color = '#eceae5') {
 
 export function isValidHttpUrl(value) {
   try {
-    const u = new URL(value);
+    const raw = String(value || '').trim();
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const u = new URL(withProtocol);
     return u.protocol === 'http:' || u.protocol === 'https:';
   } catch {
     return false;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { Skeleton } from '../../components/Skeletons';
 import { useProduct, useProductMutations } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
 import { slugify } from '../../lib/utils';
+import { normalizeImageUrl, normalizeVideo } from '../../lib/mediaUrls';
 import { toast } from '../../lib/toast';
 
 const schema = z.object({
@@ -33,6 +34,8 @@ export default function AdminProductFormPage() {
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
   const [specsText, setSpecsText] = useState('material: \nsizes: Custom');
+  const imagesRef = useRef(null);
+  const videosRef = useRef(null);
 
   const {
     register,
@@ -92,18 +95,29 @@ export default function AdminProductFormPage() {
   };
 
   const onSubmit = async (values) => {
-    if (images.some((img) => !img.url?.trim())) {
+    const flushedImages = imagesRef.current?.flush?.() || { ok: true, items: images };
+    if (!flushedImages.ok) {
+      toast.error(flushedImages.error || 'Fix image URL before saving');
+      return;
+    }
+    const flushedVideos = videosRef.current?.flush?.() || { ok: true, items: videos };
+    if (!flushedVideos.ok) {
+      toast.error(flushedVideos.error || 'Fix video URL before saving');
+      return;
+    }
+
+    const currentImages = flushedImages.items || [];
+    const currentVideos = flushedVideos.items || [];
+
+    if (currentImages.some((img) => !img.url?.trim())) {
       toast.error('Every image needs a URL');
       return;
     }
-    if (images.some((img) => !img.alt?.trim())) {
-      toast.error('Every image needs alt text');
-      return;
-    }
-    if (videos.some((v) => !v.url?.trim())) {
+    if (currentVideos.some((v) => !v.url?.trim())) {
       toast.error('Every video needs a URL');
       return;
     }
+
     const payload = {
       name: values.name,
       slug: values.slug || slugify(values.name),
@@ -114,16 +128,21 @@ export default function AdminProductFormPage() {
         : [],
       featured: Boolean(values.featured),
       published: Boolean(values.published),
-      images: images.map((img, i) => ({
-        url: img.url.trim(),
-        alt: img.alt.trim(),
+      images: currentImages.map((img, i) => ({
+        url: normalizeImageUrl(img.url.trim()),
+        alt: (img.alt || 'Portfolio image').trim(),
         order: i,
       })),
-      videos: videos.map((v, i) => ({
-        url: v.url.trim(),
-        thumbnailUrl: v.thumbnailUrl?.trim() || '',
-        order: i,
-      })),
+      videos: currentVideos.map((v, i) => {
+        const video = normalizeVideo(v.url.trim());
+        return {
+          url: video.src || v.url.trim(),
+          thumbnailUrl: v.thumbnailUrl ? normalizeImageUrl(v.thumbnailUrl) : '',
+          order: i,
+          provider: video.kind !== 'file' ? video.kind : v.provider || null,
+          embedUrl: video.embedUrl || v.embedUrl || null,
+        };
+      }),
       specs: parseSpecs(specsText),
     };
 
@@ -237,11 +256,19 @@ export default function AdminProductFormPage() {
           </div>
           <div>
             <p className="label-field">Image URLs</p>
-            <UrlMediaList value={images} onChange={setImages} type="image" requireAlt addLabel="Add image URL" />
+            <UrlMediaList
+            ref={imagesRef}
+            value={images}
+            onChange={setImages}
+            type="image"
+            requireAlt
+            addLabel="Add image URL"
+          />
           </div>
           <div>
             <p className="label-field">Video URLs</p>
             <UrlMediaList
+              ref={videosRef}
               value={videos}
               onChange={setVideos}
               type="video"
