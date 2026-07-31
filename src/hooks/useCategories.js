@@ -1,32 +1,47 @@
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
-  where,
   orderBy,
   serverTimestamp,
   writeBatch,
+  onSnapshot,
 } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../lib/firebase';
-import { slugify } from '../lib/uploadHelpers';
+import { slugify } from '../lib/utils';
 
 const col = () => collection(db, 'categories');
 
-async function fetchCategories({ includeAll = false } = {}) {
-  const snap = await getDocs(query(col(), orderBy('order', 'asc')));
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-}
-
 export function useCategories({ admin = false } = {}) {
+  const qc = useQueryClient();
+  const queryKey = ['categories', { admin }];
+
+  useEffect(() => {
+    const q = query(col(), orderBy('order', 'asc'));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        qc.setQueryData(queryKey, list);
+        // Keep both admin/public caches aligned (same data)
+        qc.setQueryData(['categories', { admin: !admin }], list);
+      },
+      (err) => console.error('[categories]', err)
+    );
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin]);
+
   return useQuery({
-    queryKey: ['categories', { admin }],
-    queryFn: () => fetchCategories({ includeAll: admin }),
+    queryKey,
+    queryFn: async () => [],
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -45,7 +60,12 @@ export function useCategoryMutations() {
       const prev = qc.getQueryData(['categories', { admin: true }]);
       qc.setQueryData(['categories', { admin: true }], (old = []) => [
         ...old,
-        { id: `temp-${Date.now()}`, name: vars.name, slug: slugify(vars.name), order: vars.order ?? old.length },
+        {
+          id: `temp-${Date.now()}`,
+          name: vars.name,
+          slug: slugify(vars.name),
+          order: vars.order ?? old.length,
+        },
       ]);
       return { prev };
     },
@@ -92,9 +112,4 @@ export function useCategoryMutations() {
   });
 
   return { create, update, remove, reorder };
-}
-
-export async function getCategoryById(id) {
-  const snap = await getDoc(doc(db, 'categories', id));
-  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }

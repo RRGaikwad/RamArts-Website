@@ -2,7 +2,7 @@
 
 Production-ready website for **RamArts** — a printing, signage, and branding studio.
 
-**Stack:** React 18 · Vite · Tailwind CSS · Framer Motion · React Router v6 · Firebase (Auth, Firestore, Storage, Hosting) · TanStack Query · React Hook Form + Zod
+**Stack:** React 18 · Vite · Tailwind CSS · Framer Motion · React Router v6 · Firebase (Auth, Firestore) · Vercel Hosting · TanStack Query · React Hook Form + Zod
 
 ---
 
@@ -10,7 +10,9 @@ Production-ready website for **RamArts** — a printing, signage, and branding s
 
 - Public site: Home, Work (filterable portfolio), Product detail + lightbox, Updates/news, About, Contact, 404
 - Admin panel (`/admin`): login, dashboard, CRUD for products / categories / updates, inquiries inbox, live site settings
-- Image compression on upload, blur-up lazy images, skeleton loaders, scroll/page animations
+- Media via **URL fields** (no Firebase Storage required) — paste links from Drive, Cloudinary, ImgBB, YouTube, etc.
+- Firestore realtime listeners so public pages update when admin saves
+- Blur-up lazy images, skeleton loaders, scroll/page animations
 - SEO metadata, sitemap, robots.txt, dark-mode-ready design tokens
 
 ---
@@ -37,8 +39,7 @@ cp .env.example .env
 1. Create a Firebase project (e.g. `ramarts`).
 2. Enable **Authentication → Email/Password**.
 3. Create a **Firestore** database (production mode; we deploy rules next).
-4. Enable **Storage**.
-5. Register a **Web app** and copy the config into `.env`:
+4. Register a **Web app** and copy the config into `.env`:
 
 ```env
 VITE_FIREBASE_API_KEY=...
@@ -61,12 +62,12 @@ VITE_FIREBASE_APP_ID=...
 VITE_ADMIN_UIDS=paste_uid_here
 ```
 
-4. Replace `REPLACE_WITH_ADMIN_UID` in both `firestore.rules` and `storage.rules` with the same UID.
+4. Replace `REPLACE_WITH_ADMIN_UID` in `firestore.rules` with the same UID.
 5. Deploy rules:
 
 ```bash
 firebase login
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules,firestore:indexes
 ```
 
 6. Deploy composite indexes (needed for filtered product queries):
@@ -119,8 +120,8 @@ Scripts:
 After signing in at `/admin/login`:
 
 1. **Categories** — add filters (Signage, Banners, Business Cards, Packaging, Vehicle Branding, Digital Print, …).
-2. **Products** — create items, upload images (alt text required) / videos, set specs, toggle **Published** and **Featured**.
-3. **Updates** — write posts with the rich-text editor, cover image, optional gallery, publish or schedule.
+2. **Products** — create items, paste image/video **URLs** (alt text required for images), set specs, toggle **Published** and **Featured**.
+3. **Updates** — write posts with the rich-text editor, cover image URL, optional gallery URLs, publish or schedule.
 4. **Inquiries** — read contact-form messages; mark new / read / resolved.
 5. **Settings** — edit hero text, phone, WhatsApp, address, hours, social links (updates live without redeploy).
 

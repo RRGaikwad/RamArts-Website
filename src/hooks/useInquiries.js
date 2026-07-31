@@ -1,14 +1,15 @@
 import {
   collection,
   doc,
-  getDocs,
   addDoc,
   updateDoc,
   query,
   orderBy,
   serverTimestamp,
   where,
+  onSnapshot,
 } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../lib/firebase';
 
@@ -19,22 +20,44 @@ function mapDoc(d) {
 }
 
 export function useInquiries() {
+  const qc = useQueryClient();
+  const queryKey = ['inquiries'];
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(col(), orderBy('createdAt', 'desc')),
+      (snap) => qc.setQueryData(queryKey, snap.docs.map(mapDoc)),
+      (err) => console.error('[inquiries]', err)
+    );
+    return unsub;
+  }, [qc]);
+
   return useQuery({
-    queryKey: ['inquiries'],
-    queryFn: async () => {
-      const snap = await getDocs(query(col(), orderBy('createdAt', 'desc')));
-      return snap.docs.map(mapDoc);
-    },
+    queryKey,
+    queryFn: async () => [],
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useUnreadInquiryCount() {
+  const qc = useQueryClient();
+  const queryKey = ['inquiries', 'unread'];
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(col(), where('status', '==', 'new')),
+      (snap) => qc.setQueryData(queryKey, snap.size),
+      (err) => console.error('[inquiries unread]', err)
+    );
+    return unsub;
+  }, [qc]);
+
   return useQuery({
-    queryKey: ['inquiries', 'unread'],
-    queryFn: async () => {
-      const snap = await getDocs(query(col(), where('status', '==', 'new')));
-      return snap.size;
-    },
+    queryKey,
+    queryFn: async () => 0,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -55,9 +78,6 @@ export function useCreateInquiry() {
 
 export function useInquiryMutations() {
   const qc = useQueryClient();
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['inquiries'] });
-  };
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }) => {
@@ -74,7 +94,6 @@ export function useInquiryMutations() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(['inquiries'], ctx.prev);
     },
-    onSettled: invalidate,
   });
 
   return { updateStatus };

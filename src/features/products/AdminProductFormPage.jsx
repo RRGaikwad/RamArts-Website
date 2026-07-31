@@ -5,11 +5,11 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { SEO } from '../../components/SEO';
 import { Button } from '../../components/Button';
-import { MediaUploader } from '../../components/MediaUploader';
+import { UrlMediaList } from '../../components/UrlMediaList';
 import { Skeleton } from '../../components/Skeletons';
 import { useProduct, useProductMutations } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
-import { slugify } from '../../lib/uploadHelpers';
+import { slugify } from '../../lib/utils';
 import { toast } from '../../lib/toast';
 
 const schema = z.object({
@@ -50,7 +50,7 @@ export default function AdminProductFormPage() {
       categoryId: '',
       tags: '',
       featured: false,
-      published: false,
+      published: true,
     },
   });
 
@@ -92,8 +92,16 @@ export default function AdminProductFormPage() {
   };
 
   const onSubmit = async (values) => {
+    if (images.some((img) => !img.url?.trim())) {
+      toast.error('Every image needs a URL');
+      return;
+    }
     if (images.some((img) => !img.alt?.trim())) {
       toast.error('Every image needs alt text');
+      return;
+    }
+    if (videos.some((v) => !v.url?.trim())) {
+      toast.error('Every video needs a URL');
       return;
     }
     const payload = {
@@ -106,8 +114,16 @@ export default function AdminProductFormPage() {
         : [],
       featured: Boolean(values.featured),
       published: Boolean(values.published),
-      images: images.map((img, i) => ({ ...img, order: i })),
-      videos,
+      images: images.map((img, i) => ({
+        url: img.url.trim(),
+        alt: img.alt.trim(),
+        order: i,
+      })),
+      videos: videos.map((v, i) => ({
+        url: v.url.trim(),
+        thumbnailUrl: v.thumbnailUrl?.trim() || '',
+        order: i,
+      })),
       specs: parseSpecs(specsText),
     };
 
@@ -194,19 +210,12 @@ export default function AdminProductFormPage() {
 
         <div>
           <p className="label-field">Images</p>
-          <MediaUploader value={images} onChange={setImages} folder="products/images" type="image" requireAlt />
+          <UrlMediaList value={images} onChange={setImages} type="image" requireAlt addLabel="Add image URL" />
         </div>
 
         <div>
           <p className="label-field">Videos</p>
-          <MediaUploader
-            value={videos}
-            onChange={setVideos}
-            folder="products/videos"
-            type="video"
-            accept="video/*"
-            requireAlt={false}
-          />
+          <UrlMediaList value={videos} onChange={setVideos} type="video" requireAlt={false} addLabel="Add video URL" />
         </div>
 
         <div>

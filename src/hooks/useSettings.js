@@ -1,4 +1,5 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../lib/firebase';
 
@@ -19,14 +20,28 @@ export const DEFAULT_SETTINGS = {
 };
 
 export function useSiteSettings() {
+  const qc = useQueryClient();
+  const queryKey = ['settings', 'site'];
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'settings', 'site'),
+      (snap) => {
+        qc.setQueryData(
+          queryKey,
+          snap.exists() ? { ...DEFAULT_SETTINGS, ...snap.data() } : DEFAULT_SETTINGS
+        );
+      },
+      (err) => console.error('[settings]', err)
+    );
+    return unsub;
+  }, [qc]);
+
   return useQuery({
-    queryKey: ['settings', 'site'],
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, 'settings', 'site'));
-      if (!snap.exists()) return DEFAULT_SETTINGS;
-      return { ...DEFAULT_SETTINGS, ...snap.data() };
-    },
-    staleTime: 1000 * 60 * 5,
+    queryKey,
+    queryFn: async () => DEFAULT_SETTINGS,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -49,6 +64,5 @@ export function useUpdateSettings() {
     onError: (_e, _v, ctx) => {
       if (ctx?.prev) qc.setQueryData(['settings', 'site'], ctx.prev);
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ['settings', 'site'] }),
   });
 }

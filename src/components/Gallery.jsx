@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createBlurDataUrl } from '../lib/uploadHelpers';
+import { createBlurDataUrl } from '../lib/utils';
 
 export function LazyImage({
   src,

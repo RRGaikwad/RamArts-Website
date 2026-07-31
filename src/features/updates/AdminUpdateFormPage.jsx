@@ -7,10 +7,10 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { SEO } from '../../components/SEO';
 import { Button } from '../../components/Button';
-import { MediaUploader } from '../../components/MediaUploader';
+import { UrlCoverField, UrlMediaList } from '../../components/UrlMediaList';
 import { Skeleton } from '../../components/Skeletons';
 import { useUpdate, useUpdateMutations } from '../../hooks/useUpdates';
-import { uploadImage, slugify } from '../../lib/uploadHelpers';
+import { slugify } from '../../lib/utils';
 import { toast } from '../../lib/toast';
 
 const schema = z.object({
@@ -40,7 +40,6 @@ export default function AdminUpdateFormPage() {
   const [body, setBody] = useState('');
   const [coverImage, setCoverImage] = useState(null);
   const [gallery, setGallery] = useState([]);
-  const [coverUploading, setCoverUploading] = useState(false);
 
   const {
     register,
@@ -51,7 +50,7 @@ export default function AdminUpdateFormPage() {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { title: '', slug: '', published: false, scheduledAt: '' },
+    defaultValues: { title: '', slug: '', published: true, scheduledAt: '' },
   });
 
   const title = watch('title');
@@ -71,28 +70,6 @@ export default function AdminUpdateFormPage() {
       setGallery(existing.gallery || []);
     }
   }, [existing, isNew, reset]);
-
-  const onCoverChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const alt = window.prompt('Alt text for cover image (required):');
-    if (!alt?.trim()) {
-      toast.error('Alt text is required');
-      e.target.value = '';
-      return;
-    }
-    setCoverUploading(true);
-    try {
-      const result = await uploadImage(file, 'updates/covers');
-      setCoverImage({ ...result, alt: alt.trim() });
-      toast.success('Cover uploaded');
-    } catch {
-      toast.error('Cover upload failed');
-    } finally {
-      setCoverUploading(false);
-      e.target.value = '';
-    }
-  };
 
   const onSubmit = async (values) => {
     const payload = {
@@ -157,22 +134,21 @@ export default function AdminUpdateFormPage() {
           <input id="slug" className="input-field" {...register('slug')} />
         </div>
 
-        <div>
-          <p className="label-field">Cover image</p>
-          {coverImage?.url && (
-            <div className="mb-3 aspect-[16/10] max-w-md overflow-hidden bg-paper-sunken">
-              <img src={coverImage.url} alt={coverImage.alt || ''} className="h-full w-full object-cover" />
-            </div>
-          )}
-          <label className="btn-secondary cursor-pointer inline-flex">
-            {coverUploading ? 'Uploading…' : 'Upload cover'}
-            <input type="file" accept="image/*" className="sr-only" onChange={onCoverChange} disabled={coverUploading} />
-          </label>
-          {coverImage && (
-            <button type="button" className="btn-ghost text-danger ml-2" onClick={() => setCoverImage(null)}>
-              Remove
-            </button>
-          )}
+        <div className="space-y-3 rounded-sm border-2 border-brand/30 bg-brand-muted/30 p-4">
+          <div>
+            <p className="font-display text-lg font-600">Media URLs</p>
+            <p className="mt-1 text-sm text-ink-muted">
+              Paste public image links for the cover and gallery. No Firebase Storage upload.
+            </p>
+          </div>
+          <div>
+            <p className="label-field">Cover image URL</p>
+            <UrlCoverField value={coverImage} onChange={setCoverImage} />
+          </div>
+          <div>
+            <p className="label-field">Gallery image URLs</p>
+            <UrlMediaList value={gallery} onChange={setGallery} type="image" requireAlt addLabel="Add gallery image URL" />
+          </div>
         </div>
 
         <div>
@@ -182,21 +158,22 @@ export default function AdminUpdateFormPage() {
           </div>
         </div>
 
-        <div>
-          <p className="label-field">Gallery</p>
-          <MediaUploader value={gallery} onChange={setGallery} folder="updates/gallery" type="image" requireAlt />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" {...register('published')} />
-            Published
-          </label>
-          <div>
-            <label className="label-field" htmlFor="scheduledAt">
-              Schedule / publish at
+        <div className="space-y-3 rounded-sm border border-line bg-paper-sunken p-4">
+          <p className="font-display text-lg font-600">Visibility</p>
+          <p className="text-sm text-ink-muted">
+            Only <strong>Published</strong> posts appear on the public Updates page.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" className="h-4 w-4" {...register('published')} />
+              Published on website
             </label>
-            <input id="scheduledAt" type="datetime-local" className="input-field" {...register('scheduledAt')} />
+            <div>
+              <label className="label-field" htmlFor="scheduledAt">
+                Schedule / publish at
+              </label>
+              <input id="scheduledAt" type="datetime-local" className="input-field" {...register('scheduledAt')} />
+            </div>
           </div>
         </div>
 

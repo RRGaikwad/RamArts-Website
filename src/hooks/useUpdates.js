@@ -1,21 +1,21 @@
 import {
   collection,
   doc,
-  getDoc,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
-  orderBy,
   serverTimestamp,
   limit,
   Timestamp,
+  onSnapshot,
 } from 'firebase/firestore';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { db } from '../lib/firebase';
-import { slugify, deleteStorageFile } from '../lib/uploadHelpers';
+import { slugify } from '../lib/utils';
+import { sortByTimestampDesc, useFirestoreRealtimeQuery } from './useFirestoreRealtimeQuery';
 
 const col = () => collection(db, 'updates');
 
@@ -23,48 +23,88 @@ function mapDoc(d) {
   return { id: d.id, ...d.data() };
 }
 
+function filterPublic(list) {
+  const now = Date.now();
+  return list.filter((u) => {
+    if (!u.published) return false;
+    if (!u.publishedAt) return true;
+    const ts = u.publishedAt?.toMillis?.() ?? new Date(u.publishedAt).getTime();
+    return ts <= now;
+  });
+}
+
 export function useUpdates({ admin = false, limitCount } = {}) {
-  return useQuery({
+  return useFirestoreRealtimeQuery({
     queryKey: ['updates', { admin, limitCount }],
-    queryFn: async () => {
-      let q;
-      if (admin) {
-        q = query(col(), orderBy('createdAt', 'desc'));
-      } else {
-        const constraints = [
-          where('published', '==', true),
-          orderBy('publishedAt', 'desc'),
-        ];
-        if (limitCount) constraints.push(limit(limitCount));
-        q = query(col(), ...constraints);
-      }
-      const snap = await getDocs(q);
-      // Filter scheduled posts that aren't due yet (client-side for public)
-      const now = Date.now();
-      return snap.docs.map(mapDoc).filter((u) => {
-        if (admin) return true;
-        if (!u.publishedAt) return true;
-        const ts = u.publishedAt?.toMillis?.() ?? new Date(u.publishedAt).getTime();
-        return ts <= now;
-      });
+    initialData: [],
+    getRefOrQuery: () => {
+      if (admin) return col();
+      return query(col(), where('published', '==', true));
+    },
+    mapSnapshot: (snap) => {
+      let list = snap.docs.map(mapDoc);
+      if (!admin) list = filterPublic(list);
+      list = sortByTimestampDesc(list, admin ? 'createdAt' : 'publishedAt');
+      if (limitCount && !admin) list = list.slice(0, limitCount);
+      return list;
     },
   });
 }
 
 export function useUpdate(slugOrId, { bySlug = true } = {}) {
-  return useQuery({
-    queryKey: ['update', slugOrId, { bySlug }],
-    enabled: Boolean(slugOrId),
-    queryFn: async () => {
-      if (!bySlug) {
-        const snap = await getDoc(doc(db, 'updates', slugOrId));
-        return snap.exists() ? mapDoc(snap) : null;
-      }
-      const snap = await getDocs(query(col(), where('slug', '==', slugOrId), limit(1)));
-      if (snap.empty) return null;
-      return mapDoc(snap.docs[0]);
-    },
+  const qc = useQueryClient();
+  const queryKey = ['update', slugOrId, { bySlug }];
+  const enabled = Boolean(slugOrId);
+  const [ready, setReady] = useState(!enabled);
+  const [listenError, setListenError] = useState(null);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    setReady(false);
+    setListenError(null);
+
+    const onErr = (err) => {
+      console.error('[update]', err);
+      setListenError(err);
+      setReady(true);
+    };
+
+    if (!bySlug) {
+      return onSnapshot(
+        doc(db, 'updates', slugOrId),
+        (snap) => {
+          qc.setQueryData(queryKey, snap.exists() ? mapDoc(snap) : null);
+          setReady(true);
+        },
+        onErr
+      );
+    }
+
+    return onSnapshot(
+      query(col(), where('slug', '==', slugOrId), limit(1)),
+      (snap) => {
+        qc.setQueryData(queryKey, snap.empty ? null : mapDoc(snap.docs[0]));
+        setReady(true);
+      },
+      onErr
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slugOrId, bySlug, enabled]);
+
+  const result = useQuery({
+    queryKey,
+    enabled,
+    queryFn: async () => null,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
+
+  return {
+    ...result,
+    isLoading: enabled && !ready,
+    isError: Boolean(listenError) || result.isError,
+    error: listenError || result.error,
+  };
 }
 
 export function useUpdateMutations() {
@@ -109,7 +149,7 @@ export function useUpdateMutations() {
       if (data.scheduledAt) {
         payload.publishedAt = Timestamp.fromDate(new Date(data.scheduledAt));
         delete payload.scheduledAt;
-      } else if (data.published === true && !data.publishedAt) {
+      } else if (data.published === true && data.publishedAt === undefined) {
         payload.publishedAt = serverTimestamp();
       }
       await updateDoc(doc(db, 'updates', id), payload);
@@ -119,11 +159,6 @@ export function useUpdateMutations() {
 
   const remove = useMutation({
     mutationFn: async (item) => {
-      const paths = [
-        item.coverImage?.storagePath,
-        ...(item.gallery || []).map((g) => g.storagePath),
-      ].filter(Boolean);
-      await Promise.all(paths.map(deleteStorageFile));
       await deleteDoc(doc(db, 'updates', item.id));
     },
     onMutate: async (item) => {
