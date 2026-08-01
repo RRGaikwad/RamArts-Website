@@ -37,21 +37,36 @@ export default function AdminSettingsPage() {
   const mapPreview = normalizeMapEmbedUrl(watch('mapEmbedUrl') || '');
 
   useEffect(() => {
-    if (settings) {
-      reset({
-        heroTitle: settings.heroTitle || '',
-        heroSubtitle: settings.heroSubtitle || '',
-        contactEmail: settings.contactEmail || '',
-        contactPhone: settings.contactPhone || '',
-        whatsappNumber: settings.whatsappNumber || '',
-        address: settings.address || '',
-        mapEmbedUrl: settings.mapEmbedUrl || '',
-        businessHours: settings.businessHours || '',
-        instagram: settings.socialLinks?.instagram || '',
-        facebook: settings.socialLinks?.facebook || '',
-      });
-    }
-  }, [settings, reset]);
+    if (isLoading || !settings) return;
+    reset({
+      heroTitle: settings.heroTitle || '',
+      heroSubtitle: settings.heroSubtitle || '',
+      contactEmail: settings.contactEmail || '',
+      contactPhone: settings.contactPhone || '',
+      whatsappNumber: settings.whatsappNumber || '',
+      address: settings.address || '',
+      mapEmbedUrl: settings.mapEmbedUrl || '',
+      businessHours: settings.businessHours || '',
+      instagram: settings.socialLinks?.instagram || '',
+      facebook: settings.socialLinks?.facebook || '',
+    });
+    // Only re-hydrate when server snapshot identity changes — not on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isLoading,
+    settings?.updatedAt?.seconds ?? settings?.updatedAt,
+    settings?.contactEmail,
+    settings?.contactPhone,
+    settings?.heroTitle,
+    settings?.heroSubtitle,
+    settings?.whatsappNumber,
+    settings?.address,
+    settings?.mapEmbedUrl,
+    settings?.businessHours,
+    settings?.socialLinks?.instagram,
+    settings?.socialLinks?.facebook,
+    reset,
+  ]);
 
   const onSubmit = async (values) => {
     try {
@@ -116,7 +131,17 @@ export default function AdminSettingsPage() {
               <label className="label-field" htmlFor="contactEmail">
                 Email
               </label>
-              <input id="contactEmail" className="input-field" {...register('contactEmail')} />
+              <input
+                id="contactEmail"
+                type="email"
+                inputMode="email"
+                autoComplete="organization"
+                className="input-field"
+                {...register('contactEmail')}
+              />
+              {errors.contactEmail && (
+                <p className="mt-1 text-sm text-danger">{errors.contactEmail.message}</p>
+              )}
             </div>
             <div>
               <label className="label-field" htmlFor="contactPhone">

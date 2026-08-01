@@ -24,6 +24,7 @@ export default function ProductDetailPage() {
       type: 'video',
       url: v.url,
       thumbnailUrl: v.thumbnailUrl,
+      embedUrl: v.embedUrl,
       alt: product.name,
     }));
     return [...images, ...videos];
@@ -101,7 +102,12 @@ export default function ProductDetailPage() {
             >
               {cover?.type === 'video' ? (
                 <div className="pointer-events-none aspect-[16/10] w-full">
-                  <MediaPlayer url={cover.url} poster={cover.thumbnailUrl} className="h-full object-cover" />
+                  <MediaPlayer
+                    url={cover.url}
+                    embedUrl={cover.embedUrl}
+                    poster={cover.thumbnailUrl}
+                    className="h-full object-cover"
+                  />
                 </div>
               ) : (
                 <LazyImage

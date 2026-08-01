@@ -1,5 +1,5 @@
 import { doc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '../lib/firebase';
 import { normalizeMapEmbedUrl, normalizeSocialUrl } from '../lib/mediaUrls';
@@ -31,7 +31,6 @@ function mergeSettings(raw = {}) {
   };
 }
 
-/** Public-facing normalized view of settings */
 export function getDisplaySettings(settings) {
   const s = mergeSettings(settings || {});
   return {
@@ -53,6 +52,7 @@ export function useSiteSettings() {
     const unsub = onSnapshot(
       doc(db, 'settings', 'site'),
       (snap) => {
+        // Store RAW merged settings in cache (stable until Firestore updates)
         qc.setQueryData(queryKey, snap.exists() ? mergeSettings(snap.data()) : DEFAULT_SETTINGS);
         setReady(true);
       },
@@ -71,9 +71,12 @@ export function useSiteSettings() {
     refetchOnWindowFocus: false,
   });
 
+  // Memoize so admin form reset() is NOT called on every render
+  const data = useMemo(() => getDisplaySettings(result.data), [result.data]);
+
   return {
     ...result,
-    data: getDisplaySettings(result.data),
+    data,
     isLoading: !ready,
   };
 }
@@ -87,13 +90,17 @@ export function useUpdateSettings() {
         facebook: normalizeSocialUrl(data.socialLinks?.facebook || data.facebook || ''),
       };
       const payload = {
-        ...data,
+        heroTitle: data.heroTitle,
+        heroSubtitle: data.heroSubtitle,
+        contactEmail: data.contactEmail,
+        contactPhone: data.contactPhone,
+        whatsappNumber: data.whatsappNumber || '',
+        address: data.address || '',
         mapEmbedUrl: normalizeMapEmbedUrl(data.mapEmbedUrl || ''),
+        businessHours: data.businessHours || '',
         socialLinks,
         updatedAt: serverTimestamp(),
       };
-      delete payload.instagram;
-      delete payload.facebook;
       await setDoc(doc(db, 'settings', 'site'), payload, { merge: true });
     },
     onMutate: async (data) => {

@@ -97,9 +97,14 @@ vercel.json              SPA rewrites → index.html
   - Settings deep-merge + normalize on save/read; map preview in admin; always-enabled Save.
 - **Rule:** Never nest forms in admin. Always normalize third-party URLs before write and on display. Redeploy Production after CMS media fixes.
 
-### Approach for realtime sync
-- Use `onSnapshot` → `queryClient.setQueryData` via `useFirestoreRealtimeQuery`.
-- Avoid composite indexes where possible (Spark reliability).
+### 2026-08-01 — Videos failing, gallery close, settings email uneditable
+- **Videos:** `ensureHttps()` rejected common pastes like `youtube.com/watch?v=…` / `www.youtube.com/…` (regex required a TLD boundary that paths broke). YouTube Shorts/live/m. URLs also missed ID parsing.
+  - **Fix:** Broader `ensureHttps`, robust `getYouTubeId` (watch/shorts/live/embed/youtu.be), iframe paste support, clearer video add UX, `stripUndefined` on product save.
+- **Gallery close:** Close control was low-contrast on dark overlay.
+  - **Fix:** Large circular close button (paper/brand hover) + click backdrop to close; stopPropagation on media/nav.
+- **Settings email:** `useSiteSettings` returned `getDisplaySettings(result.data)` as a **new object every render** → admin `useEffect([settings])` called `reset()` continuously → email (and other fields) snapped back while typing.
+  - **Fix:** `useMemo` for display settings; reset only when server field values / `updatedAt` change; `autoComplete="organization"` on email.
+- **Rule:** Never derive unstable object identities in hooks that feed form `reset()`. Always accept protocol-less YouTube URLs.
 
 ---
 

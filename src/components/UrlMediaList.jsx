@@ -21,10 +21,16 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
   const [thumb, setThumb] = useState('');
 
   const commitOne = (list, rawUrl, rawAlt, rawThumb) => {
-    const trimmed = ensureHttps(rawUrl.trim());
-    if (!trimmed) return { ok: true, added: false, list };
+    const trimmedInput = String(rawUrl || '').trim();
+    if (!trimmedInput) return { ok: true, added: false, list };
+
+    const trimmed = ensureHttps(trimmedInput);
     if (!isValidHttpUrl(trimmed)) {
-      return { ok: false, error: 'Enter a valid http(s) URL', list };
+      return {
+        ok: false,
+        error: 'Enter a valid URL (YouTube, Vimeo, or direct .mp4 / https link)',
+        list,
+      };
     }
 
     if (type === 'image') {
@@ -40,28 +46,37 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
       return { ok: true, added: true, list: [...list, item] };
     }
 
-    const video = normalizeVideo(trimmed);
+    const video = normalizeVideo(trimmedInput);
+    if (!video.src && !video.embedUrl) {
+      return { ok: false, error: 'Could not read that video URL', list };
+    }
+
     const thumbNorm = (rawThumb || '').trim() ? normalizeImageUrl(rawThumb.trim()) : '';
-    if (thumbNorm && !isValidHttpUrl(thumbNorm)) {
+    if ((rawThumb || '').trim() && !isValidHttpUrl(thumbNorm)) {
       return { ok: false, error: 'Thumbnail must be a valid URL', list };
     }
+
     const item = {
       url: video.src || trimmed,
-      thumbnailUrl: thumbNorm,
+      thumbnailUrl: thumbNorm || '',
       order: list.length,
-      provider: video.kind !== 'file' ? video.kind : undefined,
-      embedUrl: video.embedUrl || undefined,
+      provider: video.kind !== 'file' ? video.kind : null,
+      embedUrl: video.embedUrl || null,
     };
     return { ok: true, added: true, list: [...list, item] };
   };
 
   const add = () => {
+    if (!url.trim()) {
+      toast.error(type === 'video' ? 'Paste a YouTube, Vimeo, or video file URL first' : 'Paste a media URL first');
+      return;
+    }
     const result = commitOne(value || [], url, alt, thumb);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    if (!url.trim()) {
+    if (!result.added) {
       toast.error('Paste a media URL first');
       return;
     }
@@ -69,7 +84,16 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
     setUrl('');
     setAlt('');
     setThumb('');
-    toast.success(type === 'video' ? 'Video URL added' : 'Image URL added');
+    const kind = type === 'video' ? normalizeVideo(url).kind : 'image';
+    toast.success(
+      type === 'video'
+        ? kind === 'youtube'
+          ? 'YouTube video added'
+          : kind === 'vimeo'
+            ? 'Vimeo video added'
+            : 'Video URL added'
+        : 'Image URL added'
+    );
   };
 
   useImperativeHandle(ref, () => ({
@@ -115,8 +139,8 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
           return {
             ...item,
             url: video.src || ensureHttps(fieldValue),
-            provider: video.kind !== 'file' ? video.kind : undefined,
-            embedUrl: video.embedUrl || undefined,
+            provider: video.kind !== 'file' ? video.kind : null,
+            embedUrl: video.embedUrl || null,
           };
         }
         if (field === 'thumbnailUrl') {
@@ -134,9 +158,18 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">
-        Paste a public link, then click <strong>{addLabel}</strong> (or just Save — we&apos;ll pick up a
-        pending URL). Direct image links work best; Drive/Dropbox/YouTube links are normalized when
-        possible.
+        {type === 'video' ? (
+          <>
+            Paste a <strong>YouTube</strong>, <strong>Vimeo</strong>, or direct video file URL, then click{' '}
+            <strong>{addLabel}</strong> (or Save — pending URLs are included). Works with or without{' '}
+            <code className="text-caption">https://</code>.
+          </>
+        ) : (
+          <>
+            Paste a public link, then click <strong>{addLabel}</strong> (or just Save — we&apos;ll pick up a
+            pending URL). Direct image links work best; Drive/Dropbox links are normalized when possible.
+          </>
+        )}
       </p>
 
       <div className="space-y-3 border border-line bg-paper p-4">
@@ -157,7 +190,7 @@ export const UrlMediaList = forwardRef(function UrlMediaList(
             }}
             placeholder={
               type === 'video'
-                ? 'https://youtube.com/watch?v=… or .mp4'
+                ? 'youtube.com/watch?v=… or youtu.be/… or .mp4'
                 : 'https://…/photo.jpg'
             }
           />

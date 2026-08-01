@@ -54,16 +54,23 @@ export function LazyImage({
   );
 }
 
-/** Renders file video, YouTube, or Vimeo */
-export function MediaPlayer({ url, poster, className = '', autoPlay = false }) {
+/** Prefer stored embedUrl when present (YouTube/Vimeo) */
+export function MediaPlayer({ url, poster, embedUrl, className = '', autoPlay = false }) {
   const video = normalizeVideo(url);
-  if (!video.src && !video.embedUrl) return null;
+  const resolvedEmbed = embedUrl || video.embedUrl;
+  const kind = embedUrl?.includes('vimeo')
+    ? 'vimeo'
+    : embedUrl?.includes('youtube')
+      ? 'youtube'
+      : video.kind;
 
-  if (video.kind === 'youtube' || video.kind === 'vimeo') {
+  if (!video.src && !resolvedEmbed) return null;
+
+  if (kind === 'youtube' || kind === 'vimeo' || resolvedEmbed) {
     return (
       <iframe
         title="Video"
-        src={video.embedUrl}
+        src={resolvedEmbed}
         className={`aspect-video w-full border-0 ${className}`}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
@@ -147,14 +154,18 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
           role="dialog"
           aria-modal="true"
           aria-label="Media gallery"
+          onClick={onClose}
         >
           <button
             type="button"
-            onClick={onClose}
-            className="absolute right-4 top-4 z-10 rounded-sm bg-paper/10 p-2 text-paper hover:bg-paper/20"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose?.();
+            }}
+            className="absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-paper text-ink shadow-lift transition hover:scale-105 hover:bg-brand hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper md:right-6 md:top-6"
             aria-label="Close gallery"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
@@ -163,7 +174,10 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
             <>
               <button
                 type="button"
-                onClick={prev}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  prev();
+                }}
                 className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-paper/10 p-3 text-paper hover:bg-paper/20 md:left-6"
                 aria-label="Previous"
               >
@@ -173,7 +187,10 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
               </button>
               <button
                 type="button"
-                onClick={next}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  next();
+                }}
                 className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-sm bg-paper/10 p-3 text-paper hover:bg-paper/20 md:right-6"
                 aria-label="Next"
               >
@@ -192,9 +209,16 @@ export function GalleryLightbox({ items = [], startIndex = 0, open, onClose }) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.25 }}
+              onClick={(e) => e.stopPropagation()}
             >
               {current.type === 'video' ? (
-                <MediaPlayer url={current.url} poster={current.thumbnailUrl} autoPlay className="max-h-[85vh]" />
+                <MediaPlayer
+                  url={current.url}
+                  embedUrl={current.embedUrl}
+                  poster={current.thumbnailUrl}
+                  autoPlay
+                  className="max-h-[85vh]"
+                />
               ) : (
                 <img
                   src={normalizeImageUrl(current.url)}

@@ -10,7 +10,7 @@ import { Skeleton } from '../../components/Skeletons';
 import { useProduct, useProductMutations } from '../../hooks/useProducts';
 import { useCategories } from '../../hooks/useCategories';
 import { slugify } from '../../lib/utils';
-import { normalizeImageUrl, normalizeVideo } from '../../lib/mediaUrls';
+import { normalizeImageUrl, normalizeVideo, stripUndefined } from '../../lib/mediaUrls';
 import { toast } from '../../lib/toast';
 
 const schema = z.object({
@@ -118,7 +118,7 @@ export default function AdminProductFormPage() {
       return;
     }
 
-    const payload = {
+    const payload = stripUndefined({
       name: values.name,
       slug: values.slug || slugify(values.name),
       description: values.description || '',
@@ -139,12 +139,12 @@ export default function AdminProductFormPage() {
           url: video.src || v.url.trim(),
           thumbnailUrl: v.thumbnailUrl ? normalizeImageUrl(v.thumbnailUrl) : '',
           order: i,
-          provider: video.kind !== 'file' ? video.kind : v.provider || null,
-          embedUrl: video.embedUrl || v.embedUrl || null,
+          provider: video.kind !== 'file' ? video.kind : null,
+          embedUrl: video.embedUrl || null,
         };
       }),
       specs: parseSpecs(specsText),
-    };
+    });
 
     try {
       if (isNew) {
